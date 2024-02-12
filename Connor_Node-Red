@@ -1,0 +1,260 @@
+//********************************************************//
+//*  University of Nottingham                            *//
+//*  Department of Electrical and Electronic Engineering *//
+//*  UoN EEEBot 2023                                     *//
+//*                                                      *//
+//*  ESP32 MQTT EEEBot Template                          *//
+//*                                                      *//
+//*  Nat Dacombe                                         *//
+//********************************************************//
+
+// the following code is modified from https://randomnerdtutorials.com by Rui Santos
+
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <Wire.h>
+#include <NewPing.h>
+#include <ESP32Encoder.h>
+
+//Defining pins for Ultrasound Sensor
+#define TRIGGER_PIN 33
+#define ECHO_PIN 25
+#define MAX_DISTANCE 200
+
+#define IRLED1 39
+#define IRLED2 27
+#define IRLED3 4
+#define IRLED4 14
+#define IRLED5 35
+#define IRLED6 36
+
+//Average filter for Ultrasound Sensor
+int distance6 = 0;
+int distance5 = 0;
+int distance4 = 0;
+int distance3 = 0;
+int distance2 = 0;
+int distance1 = 0;
+int avgdistance = 0;
+
+//three integer values send to slave esp for servo motor
+int x = -110;
+int y = -110;
+int z = 80;
+
+NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); //NewPing setup of pins and maximum distance.
+
+// replace the next variables with your SSID/Password combination
+const char* ssid = "remnantb15";                     
+const char* password = "donaldduck";            
+
+// add your MQTT Broker IP address, example:
+//const char* mqtt_server = "192.168.1.144";                      
+const char* mqtt_server = "B01-15.local";          
+
+WiFiClient espClientA;
+PubSubClient client(espClientA);
+long lastMsg = 0;
+char msg[50];
+int value = 0;
+const int LEDPin = 32;
+String Payload;
+int flag = 0;
+
+void setup() {
+  pinMode(LEDPin, OUTPUT);
+  Serial.begin(9600);
+  Wire.begin();
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+}
+
+void setup_wifi() {
+  delay(10);
+  // we start by connecting to a WiFi network
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void callback(char* topic, byte* message, unsigned int length) {
+  //Serial.print("Message arrived on topic: ");
+ // Serial.print(topic);
+ // Serial.print(". Message: ");
+  
+  
+  for (int i = 0; i < length; i++) {
+   // Serial.print((char)message[i]);
+    Payload += (char)message[i];
+    if (Payload == "1"){
+      flag = 1;
+  }
+  else{
+    flag = 0;
+  }
+  Payload = "";
+} 
+  //Serial.println();
+  Serial.println(flag);
+
+  // add your subscribed topics here i.e. statements to control GPIOs with MQTT
+if (String(topic) == "esp32/output"){
+  if (flag == 1){
+    digitalWrite(LEDPin, HIGH);
+  }
+  else if (flag == 0){
+    digitalWrite(LEDPin, LOW);
+  }
+
+}
+}
+void reconnect() {
+  // loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect("ESP32Client")) {
+      Serial.println("connected");
+      
+      // add your subscribe topics here
+      // --
+      client.subscribe("esp32/output");
+      // --
+         
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+void loop() {
+  
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  long now = millis();
+  if (now - lastMsg > 5000) {
+    lastMsg = now;
+    
+    // add your own code here i.e. sensor measurements, publish topics & subscribe topics for GPIO control
+  
+    delay(50);
+
+  int IRDistance1 = analogRead(IRLED1);
+  int IRDistance2 = analogRead(IRLED2);
+  int IRDistance3 = analogRead(IRLED3);
+  int IRDistance4 = analogRead(IRLED4);
+  int IRDistance5 = analogRead(IRLED5);
+  int IRDistance6 = analogRead(IRLED6);
+
+
+  IRDistance1 = map(constrain(IRDistance1,490, 2920), 490, 2920, 0, 4095);
+  IRDistance2 = map(constrain(IRDistance2,1130, 4095), 1130, 4095, 0, 4095);
+  IRDistance3 = map(constrain(IRDistance3,1130, 4095), 1130, 4095, 0, 4095);
+  IRDistance4 = map(constrain(IRDistance4,1165, 4095), 1165, 4095, 0, 4095);
+  IRDistance5 = map(constrain(IRDistance5,955, 3870), 955, 3870, 0, 4095);
+  IRDistance6 = map(constrain(IRDistance6,560, 3200), 560, 3200, 0, 4095);
+
+  char IRDis1[10];
+  sprintf(IRDis1, "%d", IRDistance1);
+
+  char IRDis2[10];
+  sprintf(IRDis2, "%d", IRDistance2);
+
+  char IRDis3[10];
+  sprintf(IRDis3, "%d", IRDistance3);
+
+  char IRDis4[10];
+  sprintf(IRDis4, "%d", IRDistance4);
+
+  char IRDis5[10];
+  sprintf(IRDis5, "%d", IRDistance5);
+
+  char IRDis6[10];
+  sprintf(IRDis6, "%d", IRDistance6);
+
+  client.publish("connor/esp32/IR1", IRDis1);
+  client.publish("connor/esp32/IR2", IRDis2);
+  client.publish("connor/esp32/IR3", IRDis3);
+  client.publish("connor/esp32/IR4", IRDis4);
+  client.publish("connor/esp32/IR5", IRDis5);
+  client.publish("connor/esp32/IR6", IRDis6);
+    // distance5 = distance6;
+    // distance4 = distance5;
+    // distance3 = distance4;
+    // distance2 = distance3;
+    // distance1 = distance2;
+    // distance6 = sonar.ping_cm();
+    // avgdistance = (distance6 + distance5 + distance4 + distance3 + distance2 + distance1)/6;
+
+    // avgdistance = avgdistance * 10;
+
+    // //Serial.print("Distance: ");
+    // //Serial.print(avgdistance);
+    // //Serial.println("mm");
+
+
+    // char avgDsc[8];
+    // sprintf(avgDsc, "%d", avgdistance);
+    // client.publish("esp32/distance", avgDsc);
+    // Serial.print(avgDsc);
+    // Serial.println("mm");
+
+    // int16_t ECount1 = 0;
+    // int16_t ECount2 = 0;
+    // uint8_t bytesReceived = Wire.requestFrom(I2C_SLAVE_ADDR, 4);
+    // uint8_t ECount116_9 = Wire.read();
+    // uint8_t ECount18_1 = Wire.read();
+    // uint8_t ECount216_9 = Wire.read();
+    // uint8_t ECount28_1 = Wire.read();
+
+    // ECount1 = (ECount116_9 >> 8) | ECount18_1;
+    // ECount2 = (ECount216_9 >> 8) | ECount28_1;
+
+    // // Serial.print(ECount1);
+    // // Serial.print("\t");
+    // // Serial.println(ECount2);
+
+    // char EnCount1[3];
+    // sprintf(EnCount1, "%d", ECount1);
+    // client.publish("esp32/EncCount1", EnCount1);
+    // //Serial.print(EnCount1);
+
+    // char EnCount2[3];
+    // sprintf(EnCount2, "%d", ECount2);
+    // client.publish("esp32/EncCount2", EnCount2);
+    //Serial.print(EnCount2);
+
+    // Wire.beginTransmission(I2C_SLAVE_ADDR);
+
+    // Wire.write((byte)((x & 0x0000FF00) >> 8));
+    // Wire.write((byte)(x & 0x000000FF));
+
+    // Wire.write((byte)((y & 0x0000FF00) >> 8));
+    // Wire.write((byte)(y & 0x000000FF));
+
+    // Wire.write((byte)((z & 0x0000FF00) >> 8));
+    // Wire.write((byte)(z & 0x000000FF));
+
+    // Wire.endTransmission();
+    // delay(100);
+  }
+}
