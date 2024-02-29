@@ -3,12 +3,11 @@
 //*  Department of Electrical and Electronic Engineering *//
 //*  UoN EEEBot 2023                                     *//
 //*                                                      *//
-//*  ESP32 MQTT EEEBot Template                          *//
+//*  Node-Red Code                                       *//
 //*                                                      *//
-//*  Nat Dacombe                                         *//
+//*  Connor Remnant                                      *//
 //********************************************************//
 
-// the following code is modified from https://randomnerdtutorials.com by Rui Santos
 
 #include <WiFi.h>
 #include <PubSubClient.h>
