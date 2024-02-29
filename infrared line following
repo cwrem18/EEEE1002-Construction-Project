@@ -1,0 +1,130 @@
+//********************************************************//
+//*  University of Nottingham                            *//
+//*  Department of Electrical and Electronic Engineering *//
+//*  UoN EEEBot 2023                                     *//
+//*                                                      *//
+//*  Skeleton Master Code for Use with the               *//
+//*  EEEBot_MainboardESP32_Firmware Code                 *//
+//*                                                      *//
+//*  Connor Remnant                                      *//
+//********************************************************//
+
+#include <Wire.h>
+
+#define I2C_SLAVE_ADDR 0x04 // 4 in hexadecimal
+
+//defining the pins for the infrared sensors
+#define IRLED1 39
+#define IRLED2 27
+#define IRLED3 4
+#define IRLED4 14
+#define IRLED5 35
+#define IRLED6 36
+
+void setup()
+{
+  Serial.begin(9600);
+  ESP32Encoder::useInternalWeakPullResistors=UP;
+  Wire.begin();   // join i2c bus (address optional for the master) - on the ESP32 the default I2C pins are 21 (SDA) and 22 (SCL)
+}
+
+// three integer values are sent to the slave device
+int leftMotor_speed = 115;
+int rightMotor_speed = 115;
+int SAngle = 128;
+int baseSpeed = 120;
+
+
+float integralEr = 0;
+float PrvEr = 0;
+
+void loop()
+{
+
+//reading the input signals from the pins from the inrared sensors and storing them in the variables
+  int IRDistance1 = analogRead(IRLED1);
+  int IRDistance2 = analogRead(IRLED2);
+  int IRDistance3 = analogRead(IRLED3);
+  int IRDistance4 = analogRead(IRLED4);
+  int IRDistance5 = analogRead(IRLED5);
+  int IRDistance6 = analogRead(IRLED6);
+
+//mapping and constraining the results to refine the numbers
+  IRDistance1 = map(constrain(IRDistance1,490, 2920), 490, 2920, 0, 4095);
+  IRDistance2 = map(constrain(IRDistance2,1130, 4095), 1130, 4095, 0, 4095);
+  IRDistance3 = map(constrain(IRDistance3,1130, 4095), 1130, 4095, 0, 4095);
+  IRDistance4 = map(constrain(IRDistance4,1165, 4095), 1165, 4095, 0, 4095);
+  IRDistance5 = map(constrain(IRDistance5,955, 3870), 955, 3870, 0, 4095);
+  IRDistance6 = map(constrain(IRDistance6,560, 3200), 560, 3200, 0, 4095);
+
+//found the distance from how far each sensor is from the center point and store them in these variables
+  float Xi6 = -3.4
+  float Xi5 = -2.2
+  float Xi4 = -0.8
+  float Xi3 = 0.5;
+  float Xi2 = 1.8;
+  float Xi1 = 2.9;
+
+//summing the values from the infrared sensors' values
+  float SiSum = IRDistance1 + IRDistance2 + IRDistance3 + IR Distance4 + IRDistance5 + IRDistance6;
+
+//calculating weighted average
+  float Xpk = ((Xi1*IRDistance1)+(Xi2*IRDistance2)+(Xi3*IRDistance3)+(Xi4*IRDistance4)+(Xi5*IRDistance5)+(Xi6*IRDistance6))/SiSum;
+
+  int setPoint = 0;
+
+//finding the error for calculating in PID
+  float error = setPoint - Xpk;
+
+//finding the integral error for PID
+  integralEr += error;
+  
+  //finding the differential error for PID
+  float DiffEr = error - PrvEr;
+  PrvEr = error;
+
+//K values for PID.
+  float Kp = 0.6; 
+  float Ki = 0.00001;
+  float Kd = 0;
+  float Kmotor = 0.16;
+
+//Calculating u for the servo angle
+  float u = (Kp*error) + (Ki*integralEr) + (Kd*(DiffEr));
+
+//finding Servo angle by multiplying the u value from PID and the base angle which is generally straight.
+  float ServoAngle = SAngle + u;
+  
+//controlling motor speed with PID which adjusts the motor speed to help turning.
+  leftMotor_speed = baseSpeed + Kmotor*u;
+  rightMotor_speed = baseSpeed - Kmotor*u;
+
+  uint8_t bytesReceived = Wire.requestFrom(I2C_SLAVE_ADDR, 4);  // 4 indicates the number of bytes that are expected
+  uint8_t a16_9 = Wire.read();  // receive bits 16 to 9 of a (one byte)
+  uint8_t a8_1 = Wire.read();   // receive bits 8 to 1 of a (one byte)
+  uint8_t b16_9 = Wire.read();   // receive bits 16 to 9 of b (one byte)
+  uint8_t b8_1 = Wire.read();   // receive bits 8 to 1 of b (one byte)
+  
+  //Sending the values of Servo angle, left motor speed, and right motor speed.
+  Wire.beginTransmission(I2C_SLAVE_ADDR); // transmit to device #4
+  /* depending on the microcontroller, the int variable is stored as 32-bits or 16-bits
+     if you want to increase the value range, first use a suitable variable type and then modify the code below
+     for example; if the variable used to store x and y is 32-bits and you want to use signed values between -2^31 and (2^31)-1
+     uncomment the four lines below relating to bits 32-25 and 24-17 for x and y
+     for my microcontroller, int is 32-bits hence x and y are AND operated with a 32 bit hexadecimal number - change this if needed
+
+     >> X refers to a shift right operator by X bits
+  */
+  //Wire.write((byte)((x & 0xFF000000) >> 24)); // bits 32 to 25 of x
+  //Wire.write((byte)((x & 0x00FF0000) >> 16)); // bits 24 to 17 of x
+  Wire.write((byte)((leftMotor_speed & 0x0000FF00) >> 8));    // first byte of x, containing bits 16 to 9
+  Wire.write((byte)(leftMotor_speed & 0x000000FF));           // second byte of x, containing the 8 LSB - bits 8 to 1
+  //Wire.write((byte)((y & 0xFF000000) >> 24)); // bits 32 to 25 of y
+  //Wire.write((byte)((y & 0x00FF0000) >> 16)); // bits 24 to 17 of y
+  Wire.write((byte)((rightMotor_speed & 0x0000FF00) >> 8));    // first byte of y, containing bits 16 to 9
+  Wire.write((byte)(rightMotor_speed & 0x000000FF));           // second byte of y, containing the 8 LSB - bits 8 to 1
+  Wire.write((byte)((ServoAngle & 0x0000FF00) >> 8));    // first byte of y, containing bits 16 to 9
+  Wire.write((byte)(ServoAngle & 0x000000FF));           // second byte of y, containing the 8 LSB - bits 8 to 1
+  Wire.endTransmission();   // stop transmitting
+  delay(100);
+}
