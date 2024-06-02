@@ -1,0 +1,44 @@
+// ---------------------------------------------------------------------------
+// Example NewPing library sketch that does a ping about 20 times per second.
+// ---------------------------------------------------------------------------
+
+#include <NewPing.h>
+#include <Wire.h>
+
+#define TRIGGER_PIN  33 // Arduino pin tied to trigger pin on the ultrasonic sensor.
+#define ECHO_PIN     25  // Arduino pin tied to echo pin on the ultrasonic sensor.
+#define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
+
+int distance6 = 0;
+int distance5 = 0;
+int distance4 = 0;
+int distance3 = 0;
+int distance2 = 0;
+int distance1 = 0;
+int avgdistance = 0;
+
+NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
+
+void setup() {
+  Wire.begin();
+  Serial.begin(9600); // Open serial monitor at 115200 baud to see ping results.
+}
+
+void loop() {
+
+  distance5 = distance6;
+  distance4 = distance5;
+  distance3 = distance4;
+  distance2 = distance3;
+  distance1 = distance2;
+  distance6 = sonar.ping_cm();
+  avgdistance = (distance6 + distance5 + distance4 + distance3 + distance2 +distance1)/6;
+
+  Serial.print(avgdistance);
+  Serial.println("cm");
+
+
+  Wire.beginTransmission(0x08);
+  Wire.write(avgdistance);
+  Wire.endTransmission();
+}
